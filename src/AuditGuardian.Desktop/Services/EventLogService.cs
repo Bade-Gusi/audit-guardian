@@ -20,7 +20,8 @@ public class EventLogService
     /// </summary>
     public EventLogData CollectAllLogs(int sinceDays = 7, int maxPerLog = 2000)
     {
-        var since = DateTime.UtcNow.AddDays(-sinceDays);
+        var now = DateTime.Now;
+        var since = now.AddDays(-sinceDays);
         var allEvents = new List<TimelineEvent>();
         var lockObj = new object();
 
@@ -36,8 +37,9 @@ public class EventLogService
             int count = 0;
             try
             {
+                // Use local time in the query (EventLog stores local time)
                 var query = new EventLogQuery(logName, PathType.LogName,
-                    $"*[System[TimeCreated[timeline(@System.Time) >= '{since:yyyy-MM-ddTHH:mm:ss}Z']]]")
+                    $"*[System[TimeCreated[timeline(@System.Time) >= '{since:yyyy-MM-ddTHH:mm:ss}']]]")
                 { ReverseDirection = true };
 
                 using var reader = new EventLogReader(query);
@@ -47,7 +49,7 @@ public class EventLogService
                     using (record) { count++; }
                 }
 
-                // Read again to process (EventLogReader doesn't support seeking)
+                // Read again to process
                 using var reader2 = new EventLogReader(query);
                 int processed = 0;
                 while ((record = reader2.ReadEvent()) != null && processed < maxPerLog)
@@ -67,7 +69,7 @@ public class EventLogService
                     allEvents.Add(new TimelineEvent
                     {
                         LogName = logName, EventId = 0,
-                        Timestamp = DateTime.UtcNow.ToString("o"),
+                        Timestamp = ToLocalString(now),
                         Level = "Warning", Source = "AccessDenied",
                         Description = $"需要管理员权限读取 {logName}"
                     });
@@ -92,7 +94,7 @@ public class EventLogService
         return new EventLogData
         {
             TotalEvents = allEvents.Count,
-            TimeRange = new TimeRange { Start = since.ToString("o"), End = DateTime.UtcNow.ToString("o") },
+            TimeRange = new TimeRange { Start = ToLocalString(since), End = ToLocalString(now) },
             Events = allEvents,
             Summary = new EventSummary
             {
@@ -103,6 +105,9 @@ public class EventLogService
             }
         };
     }
+
+    private static string ToLocalString(DateTime dt) =>
+        dt.ToString("yyyy-MM-ddTHH:mm:ss");
 
     private List<string> GetAvailableLogNames()
     {
@@ -135,7 +140,9 @@ public class EventLogService
         {
             LogName = ShortLogName(logName),
             EventId = record.Id,
-            Timestamp = record.TimeCreated?.ToString("o") ?? DateTime.UtcNow.ToString("o"),
+            Timestamp = record.TimeCreated.HasValue
+                ? ToLocalString(record.TimeCreated.Value)
+                : ToLocalString(DateTime.Now),
             Level = record.Level switch { 1 => "Critical", 2 => "Error", 3 => "Warning", _ => "Information" },
             Source = record.ProviderName ?? "",
             Description = FormatEventDescription(record)
@@ -214,7 +221,7 @@ public class EventLogService
                 result.Add(new TimelineEvent
                 {
                     LogName = "Prefetch", EventId = 0,
-                    Timestamp = File.GetLastWriteTimeUtc(file).ToString("o"),
+                    Timestamp = ToLocalString(File.GetLastWriteTime(file)),
                     Level = "Information", Source = "Prefetch",
                     Description = $"程序运行: {name}", Severity = "info"
                 });
@@ -249,7 +256,7 @@ public class EventLogService
                     result.Add(new TimelineEvent
                     {
                         LogName = "USB", EventId = 1001,
-                        Timestamp = DateTime.UtcNow.ToString("o"),
+                        Timestamp = ToLocalString(DateTime.Now),
                         Level = "Information", Source = "USBSTOR",
                         Description = $"USB设备: {name}",
                         Severity = "info"

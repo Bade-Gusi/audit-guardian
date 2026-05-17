@@ -156,50 +156,20 @@ public partial class MainWindow : Window
 
     private void ShowTimelineData()
     {
-        if (_allEvents.Count == 0) { EventLogContainer.ItemsSource = null; return; }
-
-        var search = TimelineSearchBox.Text?.ToLower() ?? "";
-
-        // Build filter
-        var selectedLogs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (FilterSecurity.IsChecked == true) selectedLogs.Add("Security");
-        if (FilterSystem.IsChecked == true) selectedLogs.Add("System");
-        if (FilterApp.IsChecked == true) selectedLogs.Add("Application");
-        if (FilterPS.IsChecked == true) { selectedLogs.Add("PowerShell"); selectedLogs.Add("WindowsPowerShell"); }
-        if (FilterOther.IsChecked == true) { /* include everything not in above */ }
-
-        var filtered = _allEvents.Where(e =>
+        if (_allEvents == null || _allEvents.Count == 0)
         {
-            // Log name filter
-            bool logMatch = FilterOther.IsChecked == true
-                ? selectedLogs.Contains(e.LogName) || !IsStandardLog(e.LogName)
-                : selectedLogs.Contains(e.LogName);
-            if (!logMatch) return false;
+            if (EventLogContainer != null) EventLogContainer.ItemsSource = null;
+            return;
+        }
 
-            // Level filter
-            if (FilterLevel.SelectedIndex == 1 && e.Level != "Error" && e.Level != "Warning" && e.Level != "Critical") return false;
-            if (FilterLevel.SelectedIndex == 2 && e.Level != "Error" && e.Level != "Critical") return false;
-            if (FilterLevel.SelectedIndex == 3 && e.Level != "Warning") return false;
-            if (FilterLevel.SelectedIndex == 4 && e.Level != "Information") return false;
+        // Guard: filter controls may be null if the Timeline panel hasn't been shown yet
+        bool hasFilters = FilterSecurity != null;
 
-            // Date filter
-            if (FilterDateRange.SelectedIndex <= 3)
-            {
-                var days = FilterDateRange.SelectedIndex switch { 0 => 1, 1 => 3, 2 => 7, 3 => 30, _ => 365 };
-                if (DateTime.TryParse(e.Timestamp, out var dt) && dt < DateTime.UtcNow.AddDays(-days))
-                    return false;
-            }
+        var search = hasFilters ? (TimelineSearchBox.Text?.ToLower() ?? "") : "";
 
-            // Search
-            if (!string.IsNullOrWhiteSpace(search))
-            {
-                return (e.Description ?? "").ToLower().Contains(search) ||
-                       (e.Source ?? "").ToLower().Contains(search) ||
-                       (e.LogName ?? "").ToLower().Contains(search);
-            }
-
-            return true;
-        }).ToList();
+        var filtered = hasFilters
+            ? _allEvents.Where(e => ApplyTimelineFilters(e, search)).ToList()
+            : _allEvents.ToList();
 
         // Sort by time
         filtered = filtered.OrderByDescending(e => e.Timestamp).ToList();
@@ -240,6 +210,48 @@ public partial class MainWindow : Window
 
     private static bool IsStandardLog(string name) =>
         name is "Security" or "System" or "Application" or "PowerShell" or "WindowsPowerShell";
+
+    private bool ApplyTimelineFilters(TimelineEvent e, string search)
+    {
+        // Filter controls might be null on first call
+        if (FilterSecurity == null) return true;
+
+        // Log name filter
+        var selectedLogs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (FilterSecurity.IsChecked == true) selectedLogs.Add("Security");
+        if (FilterSystem.IsChecked == true) selectedLogs.Add("System");
+        if (FilterApp.IsChecked == true) selectedLogs.Add("Application");
+        if (FilterPS.IsChecked == true) { selectedLogs.Add("PowerShell"); selectedLogs.Add("WindowsPowerShell"); }
+
+        bool logMatch = FilterOther.IsChecked == true
+            ? selectedLogs.Contains(e.LogName) || !IsStandardLog(e.LogName)
+            : selectedLogs.Contains(e.LogName);
+        if (!logMatch) return false;
+
+        // Level filter
+        if (FilterLevel.SelectedIndex == 1 && e.Level != "Error" && e.Level != "Warning" && e.Level != "Critical") return false;
+        if (FilterLevel.SelectedIndex == 2 && e.Level != "Error" && e.Level != "Critical") return false;
+        if (FilterLevel.SelectedIndex == 3 && e.Level != "Warning") return false;
+        if (FilterLevel.SelectedIndex == 4 && e.Level != "Information") return false;
+
+        // Date filter
+        if (FilterDateRange.SelectedIndex <= 3)
+        {
+            var days = FilterDateRange.SelectedIndex switch { 0 => 1, 1 => 3, 2 => 7, 3 => 30, _ => 365 };
+            if (DateTime.TryParse(e.Timestamp, out var dt) && dt < DateTime.UtcNow.AddDays(-days))
+                return false;
+        }
+
+        // Search text
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            return (e.Description ?? "").ToLower().Contains(search) ||
+                   (e.Source ?? "").ToLower().Contains(search) ||
+                   (e.LogName ?? "").ToLower().Contains(search);
+        }
+
+        return true;
+    }
 
     private async void LoadScan_Click(object sender, RoutedEventArgs e)
     {
@@ -547,9 +559,31 @@ public partial class MainWindow : Window
 
     private static string FormatTimestamp(string ts)
     {
-        if (DateTime.TryParse(ts, out var dt))
-            return dt.ToString("yyyy-MM-dd HH:mm:ss");
-        return ts;
+        if (string.IsNullOrWhiteSpace(ts)) return "-";
+
+        // Handle ISO 8601 with timezone (e.g., "2026-05-17T20:30:00.0000000+08:00")
+        if (DateTime.TryParse(ts, System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.RoundtripKind, out var dt))
+        {
+            // Convert to local time for display
+            var local = dt.Kind == DateTimeKind.Utc ? dt.ToLocalTime() : dt;
+            return local.ToString("yyyy-MM-dd HH:mm:ss");
+        }
+
+        // Try common formats
+        string[] formats = {
+            "yyyy-MM-ddTHH:mm:ss.fffffffzzz",
+            "yyyy-MM-ddTHH:mm:ss.fffffffZ",
+            "yyyy-MM-ddTHH:mm:ss.fffZ",
+            "yyyy-MM-ddTHH:mm:ss",
+            "MM/dd/yyyy HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss"
+        };
+        if (DateTime.TryParseExact(ts, formats, System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var dt2))
+            return dt2.ToString("yyyy-MM-dd HH:mm:ss");
+
+        return ts.Length > 19 ? ts[..19].Replace("T", " ") : ts;
     }
 
     public class TimelineItemData
