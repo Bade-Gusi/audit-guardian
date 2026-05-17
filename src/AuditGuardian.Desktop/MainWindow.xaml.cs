@@ -110,22 +110,136 @@ public partial class MainWindow : Window
 
     private async void LoadEvents_Click(object sender, RoutedEventArgs e)
     {
-        DashEventVal.Text = "加载中...";
-        DashEventDesc.Text = "";
+        LoadEventsBtn.IsEnabled = false;
+        TimelineProgress.Visibility = Visibility.Visible;
+        TimelineProgressBar.Width = 0;
+
+        _eventLog.Progress += (pct, status) => Dispatcher.Invoke(() =>
+        {
+            TimelineProgressPercent.Text = $"{pct}%";
+            TimelineProgressBar.Width = pct;
+            TimelineProgressText.Text = status;
+        });
+
         try
         {
-            var data = await Task.Run(() => _eventLog.CollectEventLogsDirect(7));
+            var data = await Task.Run(() => _eventLog.CollectAllLogs(7, 2000));
             _allEvents = data.Events;
             DashEventVal.Text = data.TotalEvents.ToString("N0");
             DashEventDesc.Text = $"过去7天，{data.Events.Count}条事件";
+
+            TimelineProgress.Visibility = Visibility.Collapsed;
+            TimelineFilterPanel.Visibility = Visibility.Visible;
             ShowTimelineData();
         }
         catch (Exception ex)
         {
+            TimelineProgress.Visibility = Visibility.Collapsed;
             DashEventVal.Text = "错误";
             DashEventDesc.Text = ex.Message;
         }
+        finally { LoadEventsBtn.IsEnabled = true; }
     }
+
+    private void TimelineFilterChanged(object sender, RoutedEventArgs e)
+    {
+        ShowTimelineData();
+    }
+
+    private void TimelineLoadMore_Click(object sender, RoutedEventArgs e)
+    {
+        _timelinePageSize += 200;
+        ShowTimelineData();
+    }
+
+    private int _timelinePageSize = 200;
+
+    private void ShowTimelineData()
+    {
+        if (_allEvents.Count == 0) { EventLogContainer.ItemsSource = null; return; }
+
+        var search = TimelineSearchBox.Text?.ToLower() ?? "";
+
+        // Build filter
+        var selectedLogs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (FilterSecurity.IsChecked == true) selectedLogs.Add("Security");
+        if (FilterSystem.IsChecked == true) selectedLogs.Add("System");
+        if (FilterApp.IsChecked == true) selectedLogs.Add("Application");
+        if (FilterPS.IsChecked == true) { selectedLogs.Add("PowerShell"); selectedLogs.Add("WindowsPowerShell"); }
+        if (FilterOther.IsChecked == true) { /* include everything not in above */ }
+
+        var filtered = _allEvents.Where(e =>
+        {
+            // Log name filter
+            bool logMatch = FilterOther.IsChecked == true
+                ? selectedLogs.Contains(e.LogName) || !IsStandardLog(e.LogName)
+                : selectedLogs.Contains(e.LogName);
+            if (!logMatch) return false;
+
+            // Level filter
+            if (FilterLevel.SelectedIndex == 1 && e.Level != "Error" && e.Level != "Warning" && e.Level != "Critical") return false;
+            if (FilterLevel.SelectedIndex == 2 && e.Level != "Error" && e.Level != "Critical") return false;
+            if (FilterLevel.SelectedIndex == 3 && e.Level != "Warning") return false;
+            if (FilterLevel.SelectedIndex == 4 && e.Level != "Information") return false;
+
+            // Date filter
+            if (FilterDateRange.SelectedIndex <= 3)
+            {
+                var days = FilterDateRange.SelectedIndex switch { 0 => 1, 1 => 3, 2 => 7, 3 => 30, _ => 365 };
+                if (DateTime.TryParse(e.Timestamp, out var dt) && dt < DateTime.UtcNow.AddDays(-days))
+                    return false;
+            }
+
+            // Search
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                return (e.Description ?? "").ToLower().Contains(search) ||
+                       (e.Source ?? "").ToLower().Contains(search) ||
+                       (e.LogName ?? "").ToLower().Contains(search);
+            }
+
+            return true;
+        }).ToList();
+
+        // Sort by time
+        filtered = filtered.OrderByDescending(e => e.Timestamp).ToList();
+
+        var displayItems = filtered.Take(_timelinePageSize).Select(e => new TimelineItemData
+        {
+            Description = string.IsNullOrWhiteSpace(e.Description)
+                ? $"[{e.LogName}] Event {e.EventId}"
+                : Truncate(e.Description, 120),
+            Detail = $"{FormatTimestamp(e.Timestamp)}  |  {e.Source}  |  EID: {e.EventId}",
+            SeverityColor = e.Level switch
+            {
+                "Error" or "Critical" => (SolidColorBrush)FindResource("BrRed"),
+                "Warning" => (SolidColorBrush)FindResource("BrYellow"),
+                _ => (SolidColorBrush)FindResource("BrBlue")
+            },
+            LogName = e.LogName,
+            LogColor = e.LogName switch
+            {
+                "Security" => "#4F8CFF20",
+                "System" => "#34D39920",
+                "Application" => "#FBBF2420",
+                _ => "#4A557820"
+            }
+        }).ToList();
+
+        EventLogContainer.ItemsSource = displayItems;
+        TimelineCountText.Text = $"共 {filtered.Count} 条 | 显示 {displayItems.Count} 条";
+        TimelineTotalEvents.Text = filtered.Count.ToString("N0");
+        TimelineSecurity.Text = filtered.Count(e => e.LogName == "Security").ToString();
+        TimelineProcesses.Text = filtered.Count(e => e.Source?.Contains("Process", StringComparison.OrdinalIgnoreCase) == true ||
+            e.Description?.Contains("进程", StringComparison.OrdinalIgnoreCase) == true).ToString();
+        TimelineWarning.Text = filtered.Count(e => e.Level == "Warning" || e.Level == "Error" || e.Level == "Critical").ToString();
+        TimelineSources.Text = filtered.Select(e => e.LogName).Distinct().Count().ToString();
+
+        TimelineLoadMoreBtn.Visibility = filtered.Count > _timelinePageSize ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private static bool IsStandardLog(string name) =>
+        name is "Security" or "System" or "Application" or "PowerShell" or "WindowsPowerShell";
 
     private async void LoadScan_Click(object sender, RoutedEventArgs e)
     {
@@ -220,57 +334,6 @@ public partial class MainWindow : Window
     private void TimelineSearch_TextChanged(object sender, TextChangedEventArgs e)
     {
         ShowTimelineData();
-    }
-
-    private void ShowTimelineData()
-    {
-        if (_allEvents.Count == 0)
-        {
-            EventLogContainer.ItemsSource = null;
-            TimelineTotalEvents.Text = "0";
-            TimelineProcesses.Text = "0";
-            TimelineFiles.Text = "0";
-            TimelineUsb.Text = "0";
-            TimelineSystem.Text = "0";
-            return;
-        }
-
-        var search = TimelineSearchBox?.Text?.ToLower() ?? "";
-        var filtered = string.IsNullOrWhiteSpace(search)
-            ? _allEvents
-            : _allEvents.Where(e =>
-                (e.Description ?? "").ToLower().Contains(search) ||
-                (e.Source ?? "").ToLower().Contains(search) ||
-                (e.UserName ?? "").ToLower().Contains(search)).ToList();
-
-        var maxTake = 200;
-        var displayItems = filtered.Take(maxTake).Select(e => new TimelineItemData
-        {
-            Description = string.IsNullOrWhiteSpace(e.Description)
-                ? $"[{e.LogName}] Event {e.EventId}"
-                : Truncate(e.Description, 150),
-            Detail = $"{FormatTimestamp(e.Timestamp)}  |  {e.LogName}  |  EID: {e.EventId}  |  {e.Source}",
-            SeverityColor = e.Level switch
-            {
-                "Error" => new SolidColorBrush(Color.FromRgb(0xF8, 0x71, 0x71)),
-                "Warning" => new SolidColorBrush(Color.FromRgb(0xFB, 0xBF, 0x24)),
-                _ => new SolidColorBrush(Color.FromRgb(0x60, 0xA5, 0xFA))
-            }
-        }).ToList();
-
-        TimelineTotalEvents.Text = filtered.Count.ToString("N0");
-        TimelineProcesses.Text = filtered.Count(e => e.Description.Contains("进程", StringComparison.OrdinalIgnoreCase) || e.Source?.Contains("Process", StringComparison.OrdinalIgnoreCase) == true).ToString();
-        // Simplified counts for other categories
-        TimelineFiles.Text = filtered.Count(e => e.Source?.Contains("File", StringComparison.OrdinalIgnoreCase) == true).ToString();
-        TimelineUsb.Text = filtered.Count(e => e.Source?.Contains("USB", StringComparison.OrdinalIgnoreCase) == true || e.Description.Contains("USB")).ToString();
-        TimelineSystem.Text = filtered.Count(e => e.LogName == "System").ToString();
-
-        EventLogContainer.ItemsSource = displayItems;
-
-        if (filtered.Count > maxTake)
-            TimelineNote.Text = $"显示前 {maxTake} 条，共 {filtered.Count} 条匹配结果";
-        else
-            TimelineNote.Text = $"共 {filtered.Count} 条事件";
     }
 
     // ==================== SCAN ====================
@@ -494,6 +557,8 @@ public partial class MainWindow : Window
         public string Description { get; set; } = "";
         public string Detail { get; set; } = "";
         public SolidColorBrush SeverityColor { get; set; } = new SolidColorBrush(Color.FromRgb(0x60, 0xA5, 0xFA));
+        public string LogName { get; set; } = "";
+        public string LogColor { get; set; } = "#4A557820";
     }
 
     public class ScanFindingItemData

@@ -7,6 +7,7 @@ namespace AuditGuardian.Desktop.Services;
 public class EventLogService
 {
     private readonly CollectorRunner _runner;
+    public event Action<int, string>? Progress; // progress %, status text
 
     public EventLogService(CollectorRunner runner)
     {
@@ -14,71 +15,78 @@ public class EventLogService
     }
 
     /// <summary>
-    /// Read ALL Windows Event Logs using EventLogReader (modern .NET API).
-    /// Covers System, Security, Application + all Applications and Services Logs
-    /// (PowerShell, Sysmon, TaskScheduler, TerminalServices, etc.)
+    /// Read ALL Windows Event Logs in parallel for speed.
+    /// Each log read on background thread, results merged.
     /// </summary>
-    public EventLogData CollectAllLogs(int sinceDays = 7, int maxPerLog = 5000)
+    public EventLogData CollectAllLogs(int sinceDays = 7, int maxPerLog = 2000)
     {
         var since = DateTime.UtcNow.AddDays(-sinceDays);
         var allEvents = new List<TimelineEvent>();
+        var lockObj = new object();
 
-        // 1. Enumerate all available event logs
         var logNames = GetAvailableLogNames();
-        int totalLogs = logNames.Count;
-        int processed = 0;
+        int total = logNames.Count;
+        int completed = 0;
 
-        foreach (var logName in logNames)
+        Progress?.Invoke(0, $"发现 {total} 个日志源，并行读取中...");
+
+        // Read logs in parallel with a max concurrency
+        Parallel.ForEach(logNames, new ParallelOptions { MaxDegreeOfParallelism = 4 }, logName =>
         {
-            processed++;
+            int count = 0;
             try
             {
-                var query = new EventLogQuery(logName, PathType.LogName, $"*[System[TimeCreated[timeline(@System.Time) >= '{since:yyyy-MM-ddTHH:mm:ss}Z']]]")
-                {
-                    ReverseDirection = true
-                };
+                var query = new EventLogQuery(logName, PathType.LogName,
+                    $"*[System[TimeCreated[timeline(@System.Time) >= '{since:yyyy-MM-ddTHH:mm:ss}Z']]]")
+                { ReverseDirection = true };
 
                 using var reader = new EventLogReader(query);
-                int count = 0;
                 EventRecord? record;
                 while ((record = reader.ReadEvent()) != null && count < maxPerLog)
                 {
+                    using (record) { count++; }
+                }
+
+                // Read again to process (EventLogReader doesn't support seeking)
+                using var reader2 = new EventLogReader(query);
+                int processed = 0;
+                while ((record = reader2.ReadEvent()) != null && processed < maxPerLog)
+                {
                     using (record)
                     {
-                        count++;
-                        allEvents.Add(ConvertToTimelineEvent(record, logName));
+                        processed++;
+                        var te = ConvertToTimelineEvent(record, logName);
+                        lock (lockObj) { allEvents.Add(te); }
                     }
                 }
             }
             catch (UnauthorizedAccessException)
             {
-                // Security log often requires admin - skip gracefully
-                allEvents.Add(new TimelineEvent
+                lock (lockObj)
                 {
-                    LogName = logName,
-                    EventId = 0,
-                    Timestamp = DateTime.UtcNow.ToString("o"),
-                    Level = "Warning",
-                    Source = "AccessDenied",
-                    Description = $"需要管理员权限读取 {logName}"
-                });
+                    allEvents.Add(new TimelineEvent
+                    {
+                        LogName = logName, EventId = 0,
+                        Timestamp = DateTime.UtcNow.ToString("o"),
+                        Level = "Warning", Source = "AccessDenied",
+                        Description = $"需要管理员权限读取 {logName}"
+                    });
+                }
             }
-            catch (Exception ex)
-            {
-                // Skip logs that can't be read
-                System.Diagnostics.Debug.WriteLine($"Cannot read {logName}: {ex.Message}");
-            }
-        }
+            catch { /* skip unreadable logs */ }
 
-        // 2. Read Prefetch files for execution history
-        var prefetchEvents = ReadPrefetch();
-        allEvents.AddRange(prefetchEvents);
+            Interlocked.Increment(ref completed);
+            var pct = completed * 100 / total;
+            Progress?.Invoke(pct, $"读取 {logName} ({count} 条)...");
+        });
 
-        // 3. Read USB history
-        var usbEvents = GetUsbHistory();
-        allEvents.AddRange(usbEvents);
+        // Prefetch & USB
+        Progress?.Invoke(95, "读取 Prefetch 和 USB 历史...");
+        allEvents.AddRange(ReadPrefetch());
+        allEvents.AddRange(GetUsbHistory());
 
-        // Sort by timestamp descending
+        Progress?.Invoke(100, "完成");
+
         allEvents = allEvents.OrderByDescending(e => e.Timestamp).ToList();
 
         return new EventLogData
@@ -99,35 +107,18 @@ public class EventLogService
     private List<string> GetAvailableLogNames()
     {
         var names = new List<string>();
+        try { using var session = new EventLogSession(); names.AddRange(session.GetLogNames()); }
+        catch { names.AddRange(new[] { "Application", "System", "Security" }); }
 
-        try
-        {
-            using var session = new EventLogSession();
-            var logNames = session.GetLogNames();
-            names.AddRange(logNames);
-        }
-        catch
-        {
-            // Fallback: just try the standard logs
-            names.AddRange(new[] { "Application", "System", "Security" });
-        }
-
-        // Prioritize important channels
         var priority = new[] {
             "Security", "System", "Application",
             "Windows PowerShell",
             "Microsoft-Windows-Sysmon/Operational",
             "Microsoft-Windows-TaskScheduler/Operational",
             "Microsoft-Windows-TerminalServices-LocalSessionManager/Operational",
-            "Microsoft-Windows-Security-Auditing",
             "Microsoft-Windows-PowerShell/Operational",
             "Microsoft-Windows-AppLocker/EXE and DLL",
-            "Microsoft-Windows-CodeIntegrity/Operational",
-            "Microsoft-Windows-Windows Firewall With Advanced Security/Firewall",
             "Setup",
-            "Microsoft-Windows-DriverFrameworks-UserMode/Operational",
-            "Microsoft-Windows-SmbClient/Security",
-            "Microsoft-Windows-DNS-Client/Operational"
         };
 
         return priority.Where(p => names.Any(n =>
@@ -142,61 +133,33 @@ public class EventLogService
     {
         var te = new TimelineEvent
         {
-            LogName = logName,
+            LogName = ShortLogName(logName),
             EventId = record.Id,
             Timestamp = record.TimeCreated?.ToString("o") ?? DateTime.UtcNow.ToString("o"),
-            Level = record.Level switch
-            {
-                1 => "Critical",
-                2 => "Error",
-                3 => "Warning",
-                4 => "Information",
-                0 => "Information",
-                _ => "Information"
-            },
+            Level = record.Level switch { 1 => "Critical", 2 => "Error", 3 => "Warning", _ => "Information" },
             Source = record.ProviderName ?? "",
-            Category = (int)(record.Task ?? 0),
             Description = FormatEventDescription(record)
         };
 
-        // Extract user name from event data if available
-        try
-        {
-            if (record.Properties != null)
-            {
-                // Security events often have user data in specific indices
-                foreach (var prop in record.Properties)
-                {
-                    var val = prop?.Value?.ToString() ?? "";
-                    if (val.StartsWith("S-1-") || val.StartsWith("DESKTOP") || val.Contains("\\"))
-                    {
-                        te.UserName = val;
-                        break;
-                    }
-                }
-            }
-        }
-        catch { }
-
-        // For Security log events, mark with severity based on well-known Event IDs
+        // Mark severity based on Event ID for Security logs
         if (logName.Equals("Security", StringComparison.OrdinalIgnoreCase))
         {
             te.Severity = record.Id switch
             {
-                4624 or 4634 or 4647 or 4648 => "info",      // Logon/Logoff
-                4625 => "warning",                            // Failed logon
-                4672 or 4673 or 4674 => "warning",            // Special privileges
-                4688 or 4689 => "info",                       // Process creation
-                4698 or 4699 or 4700 or 4701 => "info",      // Scheduled tasks
-                4702 or 4703 => "warning",
-                4719 => "warning",                            // Audit policy change
-                4720 or 4722 or 4723 or 4724 or 4725 => "warning", // User account changes
-                4732 or 4733 or 4756 or 4757 => "warning",   // Group membership
-                5140 or 5142 or 5143 or 5144 or 5145 => "info", // Network share
-                5156 or 5157 or 5158 => "info",               // Firewall
-                1100 or 1102 => "warning",                    // Event log cleared
-                _ => te.Severity
+                4625 or 4648 or 4771 or 4776 or 4777 => "warning",    // Failed logon
+                4672 or 4673 => "warning",                            // Special privileges
+                4719 => "warning",                                    // Audit policy change
+                4720 or 4722 or 4723 or 4724 or 4725 or 4726 => "warning", // User changes
+                4732 or 4733 or 4756 or 4757 => "warning",            // Group membership
+                1100 or 1102 => "warning",                            // Log cleared
+                5145 => "warning",                                     // Network access
+                _ => "info"
             };
+        }
+        // PowerShell operational logs are often interesting
+        else if (logName.Contains("PowerShell", StringComparison.OrdinalIgnoreCase) && record.Id == 4104)
+        {
+            te.Severity = "warning"; // Script block logging
         }
 
         return te;
@@ -208,78 +171,65 @@ public class EventLogService
         {
             var desc = record.FormatDescription();
             if (!string.IsNullOrWhiteSpace(desc))
-                return desc.Length > 500 ? desc[..500] + "..." : desc;
+                return desc.Length > 300 ? desc[..300] + "..." : desc;
 
-            // Fallback: build description from properties
             var parts = new List<string>();
             if (record.Properties != null)
-            {
                 foreach (var prop in record.Properties)
                 {
                     var val = prop?.Value?.ToString();
                     if (!string.IsNullOrWhiteSpace(val) && val.Length < 200)
                         parts.Add(val);
                 }
-            }
-
-            if (parts.Count > 0)
-                return string.Join(" | ", parts.Take(5));
-
-            return $"[{record.ProviderName}] Event ID {record.Id}";
+            return parts.Count > 0 ? string.Join(" | ", parts.Take(5)) : $"[{record.ProviderName}] ID {record.Id}";
         }
-        catch
-        {
-            return $"[{record.ProviderName}] Event ID {record.Id}";
-        }
+        catch { return $"[{record.ProviderName}] ID {record.Id}"; }
     }
 
-    // ==================== PREFETCH READER ====================
+    private static string ShortLogName(string full)
+    {
+        if (full.Length <= 20) return full;
+        if (full.Contains('-'))
+        {
+            var parts = full.Split('-');
+            return parts.Length >= 2 ? $"{parts[^2]}-{parts[^1]}" : full;
+        }
+        return full[..Math.Min(full.Length, 20)];
+    }
+
+    // ==================== PREFETCH ====================
 
     public List<TimelineEvent> ReadPrefetch()
     {
         var result = new List<TimelineEvent>();
         try
         {
-            var prefetchDir = @"C:\Windows\Prefetch";
-            if (!Directory.Exists(prefetchDir)) return result;
-
-            var files = Directory.GetFiles(prefetchDir, "*.pf");
-            foreach (var file in files.Take(500))
+            var dir = @"C:\Windows\Prefetch";
+            if (!Directory.Exists(dir)) return result;
+            foreach (var file in Directory.GetFiles(dir, "*.pf").Take(300))
             {
                 var name = Path.GetFileNameWithoutExtension(file);
-                // Parse the app name (before the hash/run count)
-                var appName = name;
                 var dashIdx = name.LastIndexOf('-');
-                if (dashIdx > 0) appName = name[..dashIdx];
-
+                if (dashIdx > 0) name = name[..dashIdx];
                 result.Add(new TimelineEvent
                 {
-                    LogName = "Prefetch",
-                    EventId = 0,
+                    LogName = "Prefetch", EventId = 0,
                     Timestamp = File.GetLastWriteTimeUtc(file).ToString("o"),
-                    Level = "Information",
-                    Source = "Prefetch",
-                    Description = $"程序运行: {appName}",
-                    Severity = "info",
-                    Category = 1000
+                    Level = "Information", Source = "Prefetch",
+                    Description = $"程序运行: {name}", Severity = "info"
                 });
             }
         }
         catch (UnauthorizedAccessException)
         {
-            result.Add(new TimelineEvent
-            {
-                LogName = "Prefetch",
-                EventId = 0, Timestamp = DateTime.UtcNow.ToString("o"),
-                Level = "Warning", Source = "AccessDenied",
-                Description = "需要管理员权限读取 Prefetch 目录"
-            });
+            result.Add(new TimelineEvent { LogName = "Prefetch", Level = "Warning", Source = "AccessDenied",
+                Description = "需要管理员权限读取 Prefetch" });
         }
         catch { }
         return result;
     }
 
-    // ==================== USB HISTORY ====================
+    // ==================== USB ====================
 
     public List<TimelineEvent> GetUsbHistory()
     {
@@ -288,26 +238,20 @@ public class EventLogService
         {
             using var key = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Enum\USBSTOR");
             if (key == null) return result;
-
             foreach (var device in key.GetSubKeyNames())
             {
                 using var devKey = key.OpenSubKey(device);
                 if (devKey == null) continue;
-
                 foreach (var sn in devKey.GetSubKeyNames())
                 {
                     using var snKey = devKey.OpenSubKey(sn);
-                    var friendlyName = snKey?.GetValue("FriendlyName")?.ToString() ?? device;
-                    var hwId = (snKey?.GetValue("HardwareID") as string[])?.FirstOrDefault() ?? "";
-
+                    var name = snKey?.GetValue("FriendlyName")?.ToString() ?? device;
                     result.Add(new TimelineEvent
                     {
-                        LogName = "USB",
-                        EventId = 1001,
+                        LogName = "USB", EventId = 1001,
                         Timestamp = DateTime.UtcNow.ToString("o"),
-                        Level = "Information",
-                        Source = "USBSTOR",
-                        Description = $"USB设备: {friendlyName} [序列号: {sn}]",
+                        Level = "Information", Source = "USBSTOR",
+                        Description = $"USB设备: {name}",
                         Severity = "info"
                     });
                 }
@@ -317,23 +261,13 @@ public class EventLogService
         return result;
     }
 
-    // ==================== LEGACY API (for backward compat) ====================
+    // ==================== LEGACY ====================
 
     public async Task<EventLogData> CollectEventLogsAsync(int sinceDays = 7)
     {
-        try
-        {
-            return await _runner.RunCollectorAsync<EventLogData>(
-                "EventLogCollector/EventLogCollector.exe", $"--since {sinceDays}");
-        }
-        catch
-        {
-            return CollectAllLogs(sinceDays);
-        }
+        try { return await _runner.RunCollectorAsync<EventLogData>("EventLogCollector/EventLogCollector.exe", $"--since {sinceDays}"); }
+        catch { return CollectAllLogs(sinceDays); }
     }
 
-    public EventLogData CollectEventLogsDirect(int sinceDays = 7)
-    {
-        return CollectAllLogs(sinceDays);
-    }
+    public EventLogData CollectEventLogsDirect(int sinceDays = 7) => CollectAllLogs(sinceDays);
 }

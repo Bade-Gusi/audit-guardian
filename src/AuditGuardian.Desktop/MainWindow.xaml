@@ -217,56 +217,132 @@
 
                     <!-- ===== TIMELINE ===== -->
                     <StackPanel Name="PanelTimeline" Visibility="Collapsed">
-                        <Grid Margin="0,0,0,16">
+                        <Grid Margin="0,0,0,12">
                             <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                             <StackPanel>
                                 <TextBlock Text="行为时间线" FontSize="22" FontWeight="Bold"/>
                                 <TextBlock Text="用户操作完整回溯" FontSize="13" Foreground="{StaticResource BrTextSecondary}" Margin="0,4,0,0"/>
                             </StackPanel>
-                            <Button Grid.Column="1" Style="{StaticResource PrimaryButton}" Content="📥 加载事件日志" Click="LoadEvents_Click" Height="38"/>
+                            <Button Grid.Column="1" Style="{StaticResource PrimaryButton}" Content="📥 加载事件日志" Click="LoadEvents_Click" Height="38" x:Name="LoadEventsBtn"/>
                         </Grid>
 
-                        <TextBox Name="TimelineSearchBox" Style="{StaticResource InputField}" TextChanged="TimelineSearch_TextChanged"
-                                 Text="" FontSize="12" Padding="10,6" Margin="0,0,0,12"/>
-                        <TextBlock Name="TimelineNote" Text="" FontSize="11" Foreground="{StaticResource BrTextSecondary}" Margin="0,-6,0,10"/>
+                        <!-- Loading progress -->
+                        <Border Name="TimelineProgress" Style="{StaticResource CardBase}" Padding="14" Margin="0,0,0,12" Visibility="Collapsed">
+                            <StackPanel>
+                                <Grid>
+                                    <TextBlock Name="TimelineProgressText" Text="正在读取..." FontSize="13" Foreground="{StaticResource BrTextSecondary}"/>
+                                    <TextBlock Name="TimelineProgressPercent" Text="0%" FontSize="12" Foreground="{StaticResource BrTextSecondary}" HorizontalAlignment="Right"/>
+                                </Grid>
+                                <Border Height="4" Background="{StaticResource BrInputBg}" CornerRadius="999" Margin="0,8,0,0">
+                                    <Border Name="TimelineProgressBar" Height="4" Background="{StaticResource BrAccent}" CornerRadius="999" HorizontalAlignment="Left" Width="0"/>
+                                </Border>
+                            </StackPanel>
+                        </Border>
 
-                        <Grid Margin="0,0,0,20">
+                        <!-- Filter Panel -->
+                        <Border Name="TimelineFilterPanel" Style="{StaticResource CardBase}" Padding="16" Margin="0,0,0,12" Visibility="Collapsed">
+                            <Grid>
+                                <Grid.RowDefinitions><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" MinWidth="320"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+
+                                <!-- Log Source Checkboxes -->
+                                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                    <TextBlock Text="日志:" FontSize="12" Foreground="{StaticResource BrTextSecondary}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                    <CheckBox Name="FilterSecurity" Content="Security" FontSize="11" IsChecked="True" Checked="TimelineFilterChanged" Unchecked="TimelineFilterChanged" Margin="0,0,8,2"/>
+                                    <CheckBox Name="FilterSystem" Content="System" FontSize="11" IsChecked="True" Checked="TimelineFilterChanged" Unchecked="TimelineFilterChanged" Margin="0,0,8,2"/>
+                                    <CheckBox Name="FilterApp" Content="Application" FontSize="11" IsChecked="True" Checked="TimelineFilterChanged" Unchecked="TimelineFilterChanged" Margin="0,0,8,2"/>
+                                    <CheckBox Name="FilterPS" Content="PowerShell" FontSize="11" IsChecked="True" Checked="TimelineFilterChanged" Unchecked="TimelineFilterChanged" Margin="0,0,8,2"/>
+                                    <CheckBox Name="FilterOther" Content="其他" FontSize="11" IsChecked="True" Checked="TimelineFilterChanged" Unchecked="TimelineFilterChanged"/>
+                                </StackPanel>
+
+                                <!-- Level Filter -->
+                                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                    <TextBlock Text="级别:" FontSize="12" Foreground="{StaticResource BrTextSecondary}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                    <ComboBox Name="FilterLevel" SelectedIndex="0" FontSize="11" Width="100" Height="26"
+                                              SelectionChanged="TimelineFilterChanged">
+                                        <ComboBoxItem Content="全部级别"/>
+                                        <ComboBoxItem Content="仅错误/警告"/>
+                                        <ComboBoxItem Content="仅错误"/>
+                                        <ComboBoxItem Content="仅警告"/>
+                                        <ComboBoxItem Content="仅信息"/>
+                                    </ComboBox>
+                                </StackPanel>
+
+                                <!-- Date Range -->
+                                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                    <TextBlock Text="时间范围:" FontSize="12" Foreground="{StaticResource BrTextSecondary}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                    <ComboBox Name="FilterDateRange" SelectedIndex="0" FontSize="11" Width="100" Height="26"
+                                              SelectionChanged="TimelineFilterChanged">
+                                        <ComboBoxItem Content="最近1天"/>
+                                        <ComboBoxItem Content="最近3天"/>
+                                        <ComboBoxItem Content="最近7天"/>
+                                        <ComboBoxItem Content="最近30天"/>
+                                        <ComboBoxItem Content="全部"/>
+                                    </ComboBox>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- Search -->
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <TextBox Name="TimelineSearchBox" Style="{StaticResource InputField}" TextChanged="TimelineSearch_TextChanged"
+                                     Text="" FontSize="12" Padding="10,6" Margin="0,0,8,0"/>
+                            <TextBlock Grid.Column="1" Name="TimelineCountText" Text="共 0 条" FontSize="12"
+                                       Foreground="{StaticResource BrTextSecondary}" VerticalAlignment="Center"/>
+                        </Grid>
+
+                        <!-- Stats -->
+                        <Grid Margin="0,0,0,16">
                             <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
-                            <Border Grid.Column="0" Style="{StaticResource CardBase}" Padding="14,12" Margin="3">
-                                <StackPanel><TextBlock Name="TimelineTotalEvents" Text="0" Style="{StaticResource StatValue}" FontSize="20"/><TextBlock Text="总事件数" Style="{StaticResource StatLabel}"/></StackPanel>
+                            <Border Grid.Column="0" Style="{StaticResource CardBase}" Padding="12,10" Margin="2">
+                                <StackPanel><TextBlock Name="TimelineTotalEvents" Text="0" Style="{StaticResource StatValue}" FontSize="18"/><TextBlock Text="总事件数" Style="{StaticResource StatLabel}"/></StackPanel>
                             </Border>
-                            <Border Grid.Column="1" Style="{StaticResource CardBase}" Padding="14,12" Margin="3">
-                                <StackPanel><TextBlock Name="TimelineProcesses" Text="0" Style="{StaticResource StatValue}" FontSize="20"/><TextBlock Text="进程活动" Style="{StaticResource StatLabel}"/></StackPanel>
+                            <Border Grid.Column="1" Style="{StaticResource CardBase}" Padding="12,10" Margin="2">
+                                <StackPanel><TextBlock Name="TimelineSecurity" Text="0" Style="{StaticResource StatValue}" FontSize="18"/><TextBlock Text="安全事件" Style="{StaticResource StatLabel}"/></StackPanel>
                             </Border>
-                            <Border Grid.Column="2" Style="{StaticResource CardBase}" Padding="14,12" Margin="3">
-                                <StackPanel><TextBlock Name="TimelineFiles" Text="0" Style="{StaticResource StatValue}" FontSize="20"/><TextBlock Text="文件操作" Style="{StaticResource StatLabel}"/></StackPanel>
+                            <Border Grid.Column="2" Style="{StaticResource CardBase}" Padding="12,10" Margin="2">
+                                <StackPanel><TextBlock Name="TimelineProcesses" Text="0" Style="{StaticResource StatValue}" FontSize="18"/><TextBlock Text="进程活动" Style="{StaticResource StatLabel}"/></StackPanel>
                             </Border>
-                            <Border Grid.Column="3" Style="{StaticResource CardBase}" Padding="14,12" Margin="3">
-                                <StackPanel><TextBlock Name="TimelineUsb" Text="0" Style="{StaticResource StatValue}" FontSize="20"/><TextBlock Text="USB事件" Style="{StaticResource StatLabel}"/></StackPanel>
+                            <Border Grid.Column="3" Style="{StaticResource CardBase}" Padding="12,10" Margin="2">
+                                <StackPanel><TextBlock Name="TimelineWarning" Text="0" Style="{StaticResource StatValue}" FontSize="18" Foreground="{StaticResource BrYellow}"/><TextBlock Text="警告/错误" Style="{StaticResource StatLabel}"/></StackPanel>
                             </Border>
-                            <Border Grid.Column="4" Style="{StaticResource CardBase}" Padding="14,12" Margin="3">
-                                <StackPanel><TextBlock Name="TimelineSystem" Text="0" Style="{StaticResource StatValue}" FontSize="20"/><TextBlock Text="系统变更" Style="{StaticResource StatLabel}"/></StackPanel>
+                            <Border Grid.Column="4" Style="{StaticResource CardBase}" Padding="12,10" Margin="2">
+                                <StackPanel><TextBlock Name="TimelineSources" Text="0" Style="{StaticResource StatValue}" FontSize="18"/><TextBlock Text="日志源数" Style="{StaticResource StatLabel}"/></StackPanel>
                             </Border>
                         </Grid>
 
+                        <!-- Event List -->
                         <Border Style="{StaticResource CardBase}" Padding="20">
                             <StackPanel>
-                                <TextBlock Text="事件日志" Style="{StaticResource SectionTitle}"/>
-                                <ItemsControl Name="EventLogContainer" MaxHeight="600">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border Style="{StaticResource EventItem}">
-                                                <StackPanel>
-                                                    <Grid>
-                                                        <Ellipse Width="7" Height="7" Fill="{Binding SeverityColor}" VerticalAlignment="Center" HorizontalAlignment="Left"/>
-                                                        <TextBlock Text="{Binding Description}" FontSize="13" Margin="16,0,0,0" TextWrapping="Wrap"/>
-                                                    </Grid>
-                                                    <TextBlock Text="{Binding Detail}" FontSize="11" Foreground="{StaticResource BrTextMuted}" Margin="16,4,0,0"/>
-                                                </StackPanel>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
+                                <TextBlock Text="事件日志列表" Style="{StaticResource SectionTitle}"/>
+                                <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="550">
+                                    <ItemsControl Name="EventLogContainer">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <VirtualizingStackPanel/>
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Style="{StaticResource EventItem}">
+                                                    <StackPanel>
+                                                        <Grid>
+                                                            <Ellipse Width="7" Height="7" Fill="{Binding SeverityColor}" VerticalAlignment="Center" HorizontalAlignment="Left"/>
+                                                            <TextBlock Text="{Binding Description}" FontSize="12" Margin="16,0,0,0" TextWrapping="Wrap" MaxHeight="40"/>
+                                                            <Border CornerRadius="4" Background="{Binding LogColor}" Padding="6,1" HorizontalAlignment="Right">
+                                                                <TextBlock Text="{Binding LogName}" FontSize="9" Foreground="{StaticResource BrTextSecondary}"/>
+                                                            </Border>
+                                                        </Grid>
+                                                        <TextBlock Text="{Binding Detail}" FontSize="10" Foreground="{StaticResource BrTextMuted}" Margin="16,2,0,0"/>
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                                <Button Name="TimelineLoadMoreBtn" Style="{StaticResource SecondaryButton}"
+                                        Content="📥 加载更多" Margin="0,8,0,0" Click="TimelineLoadMore_Click" Visibility="Collapsed"/>
                             </StackPanel>
                         </Border>
                     </StackPanel>
