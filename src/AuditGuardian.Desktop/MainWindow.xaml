@@ -317,24 +317,39 @@
                         <Border Name="ScanFindingsPanel" Style="{StaticResource CardBase}" Padding="20" Visibility="Collapsed">
                             <StackPanel>
                                 <TextBlock Text="检测结果详情" Style="{StaticResource SectionTitle}"/>
-                                <ItemsControl Name="ScanFindingsContainer" MaxHeight="500">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border Style="{StaticResource FindingItem}" BorderBrush="{Binding BorderColor}">
-                                                <StackPanel>
-                                                    <Grid>
-                                                        <Border CornerRadius="999" Background="{Binding BadgeBg}" Padding="8,2">
-                                                            <TextBlock Text="{Binding SeverityLabel}" FontSize="10" Foreground="{Binding BadgeFg}"/>
+                                <ScrollViewer MaxHeight="500" VerticalScrollBarVisibility="Auto">
+                                    <ItemsControl Name="ScanFindingsContainer">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Style="{StaticResource FindingItem}"
+                                                        BorderBrush="{StaticResource BrBorder}">
+                                                    <Grid MinHeight="60">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="36"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <Border Grid.Column="0" Width="28" Height="28" CornerRadius="14"
+                                                                Background="{Binding BadgeBg}" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,2,0,0">
+                                                            <TextBlock Text="!" FontSize="14" FontWeight="Bold"
+                                                                       Foreground="{Binding BadgeFg}"
+                                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                         </Border>
-                                                        <TextBlock Text="{Binding Type}" FontSize="10" Foreground="{StaticResource BrTextSecondary}" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                                                        <StackPanel Grid.Column="1" Margin="0,0,0,4">
+                                                            <Grid>
+                                                                <Border CornerRadius="999" Background="{Binding BadgeBg}" Padding="10,2">
+                                                                    <TextBlock Text="{Binding SeverityLabel}" FontSize="10" Foreground="{Binding BadgeFg}" FontWeight="SemiBold"/>
+                                                                </Border>
+                                                                <TextBlock Text="{Binding Type}" FontSize="10" Foreground="{StaticResource BrTextSecondary}" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                                                            </Grid>
+                                                            <TextBlock Text="{Binding Description}" FontSize="13" Margin="0,6,0,0" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"/>
+                                                            <TextBlock Text="{Binding Meta}" FontSize="10" Foreground="{StaticResource BrTextMuted}" Margin="0,4,0,0"/>
+                                                        </StackPanel>
                                                     </Grid>
-                                                    <TextBlock Text="{Binding Description}" FontSize="13" Margin="0,4,0,0" TextWrapping="Wrap"/>
-                                                    <TextBlock Text="{Binding Meta}" FontSize="10" Foreground="{StaticResource BrTextMuted}" Margin="0,2,0,0"/>
-                                                </StackPanel>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
                             </StackPanel>
                         </Border>
                     </StackPanel>

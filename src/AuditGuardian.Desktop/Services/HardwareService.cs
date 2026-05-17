@@ -17,6 +17,28 @@ public class HardwareService
             "HardwareCollector/HardwareCollector.exe");
     }
 
+    private static readonly Dictionary<string, string> PropNameMap = new()
+    {
+        // CPU
+        ["Name"] = "名称", ["NumberOfCores"] = "核心数", ["MaxClockSpeed"] = "最大频率",
+        ["ProcessorId"] = "处理器ID", ["Manufacturer"] = "制造商", ["Caption"] = "描述",
+        ["NumberOfLogicalProcessors"] = "逻辑处理器数",
+        // GPU
+        ["AdapterRAM"] = "显存大小", ["DriverVersion"] = "驱动版本", ["VideoProcessor"] = "视频处理器",
+        ["VideoModeDescription"] = "显示模式",
+        // Motherboard
+        ["Product"] = "产品型号", ["SerialNumber"] = "序列号", ["Version"] = "版本",
+        // Disk
+        ["Model"] = "型号", ["Size"] = "容量", ["InterfaceType"] = "接口类型", ["MediaType"] = "介质类型",
+        // Network
+        ["MACAddress"] = "MAC地址", ["Speed"] = "速度", ["AdapterType"] = "适配器类型",
+        ["NetEnabled"] = "已启用",
+        // RAM
+        ["Capacity"] = "容量", ["Speed"] = "频率", ["PartNumber"] = "零件号", ["MemoryType"] = "内存类型",
+        // Common
+        ["Status"] = "状态", ["Health"] = "健康状况",
+    };
+
     /// <summary>
     /// Fallback: collect hardware directly via WMI when the collector EXE isn't available.
     /// </summary>
@@ -89,7 +111,7 @@ public class HardwareService
                     var val = obj[prop]?.ToString() ?? "";
                     result.Add(new HardwareProperty
                     {
-                        Name = prop,
+                        Name = PropNameMap.GetValueOrDefault(prop, prop),
                         Value = val,
                         IsSpoofed = false
                     });
