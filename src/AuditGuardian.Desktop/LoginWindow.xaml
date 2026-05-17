@@ -1,0 +1,163 @@
+<Window x:Class="AuditGuardian.Desktop.LoginWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="赛审卫士 · 认证"
+        Width="460" Height="587" MinWidth="400" MinHeight="480"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="SingleBorderWindow" ResizeMode="CanResizeWithGrip"
+        Background="#232838"
+        Foreground="#E8EDF5"
+        FontFamily="Microsoft YaHei, Segoe UI, sans-serif"
+        FontSize="13"
+        SnapsToDevicePixels="True">
+
+    <Window.Resources>
+        <Style TargetType="TextBox" x:Key="LoginInput">
+            <Setter Property="Background" Value="#1C212E"/>
+            <Setter Property="Foreground" Value="#E8EDF5"/>
+            <Setter Property="BorderBrush" Value="#1E2A45"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="14,10"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="CaretBrush" Value="#4F8CFF"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border x:Name="Bg" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8">
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsFocused" Value="True">
+                                <Setter TargetName="Bg" Property="BorderBrush" Value="#4F8CFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="PasswordBox" x:Key="LoginPassword">
+            <Setter Property="Background" Value="#1C212E"/>
+            <Setter Property="Foreground" Value="#E8EDF5"/>
+            <Setter Property="BorderBrush" Value="#1E2A45"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="14,10"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="PasswordBox">
+                        <Border x:Name="Bg" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8">
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsFocused" Value="True">
+                                <Setter TargetName="Bg" Property="BorderBrush" Value="#4F8CFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="LoginButton" TargetType="Button">
+            <Setter Property="Background" Value="#4F8CFF"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Height" Value="42"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg" Background="{TemplateBinding Background}" CornerRadius="10">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="#6BA0FF"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bg" Property="Opacity" Value="0.85"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bg" Property="Opacity" Value="0.4"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="32">
+        <StackPanel VerticalAlignment="Center">
+            <!-- Logo -->
+            <Border HorizontalAlignment="Center" Width="56" Height="56" CornerRadius="14"
+                    Background="#4F8CFF20" BorderBrush="#4F8CFF40" BorderThickness="1" Margin="0,0,0,6">
+                <TextBlock Text="🛡" FontSize="28" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <TextBlock Text="赛审卫士" FontSize="20" FontWeight="Bold" HorizontalAlignment="Center"/>
+            <TextBlock Text="反作弊与行为审计系统" FontSize="11" Foreground="#8892B0" HorizontalAlignment="Center" Margin="0,4,0,30"/>
+
+            <!-- Server URL -->
+            <TextBlock Text="认证服务器" FontSize="12" Foreground="#8892B0" Margin="0,0,0,6"/>
+            <TextBox Name="ServerUrlBox" Style="{StaticResource LoginInput}" Text="https://"
+                     FontFamily="Consolas" FontSize="12"/>
+            <WrapPanel Margin="0,6,0,16">
+                <Border Background="#141B2D" CornerRadius="4" Padding="7,2" Margin="0,0,4,3" Cursor="Hand"
+                        MouseDown="Example_Click" Tag="https://audit.example.com:8443">
+                    <TextBlock Text="HTTPS+域名" FontSize="10" Foreground="#8892B0"/></Border>
+                <Border Background="#141B2D" CornerRadius="4" Padding="7,2" Margin="0,0,4,3" Cursor="Hand"
+                        MouseDown="Example_Click" Tag="https://192.168.1.100:8000">
+                    <TextBlock Text="IPv4" FontSize="10" Foreground="#8892B0"/></Border>
+                <Border Background="#141B2D" CornerRadius="4" Padding="7,2" Margin="0,0,4,3" Cursor="Hand"
+                        MouseDown="Example_Click" Tag="https://[::1]:8000">
+                    <TextBlock Text="IPv6 [::1]" FontSize="10" Foreground="#8892B0"/></Border>
+                <Border Background="#141B2D" CornerRadius="4" Padding="7,2" Margin="0,0,4,3" Cursor="Hand"
+                        MouseDown="Example_Click" Tag="http://localhost:8000">
+                    <TextBlock Text="本地" FontSize="10" Foreground="#8892B0"/></Border>
+            </WrapPanel>
+
+            <!-- Password -->
+            <TextBlock Text="密码" FontSize="12" Foreground="#8892B0" Margin="0,0,0,6"/>
+            <PasswordBox Name="PasswordBox" Style="{StaticResource LoginPassword}"/>
+
+            <!-- Status -->
+            <TextBlock Name="StatusText" FontSize="12" Foreground="#F87171" Margin="0,8,0,0" Visibility="Collapsed"/>
+
+            <!-- Loading indicator -->
+            <StackPanel Name="LoadingPanel" Visibility="Collapsed" Margin="0,10,0,0">
+                <Grid>
+                    <Border Height="4" Background="#1E2A45" CornerRadius="999">
+                        <Border Name="LoadingBar" Height="4" Background="#4F8CFF" CornerRadius="999" HorizontalAlignment="Left" Width="0"/>
+                    </Border>
+                </Grid>
+                <TextBlock Name="LoadingText" Text="正在连接..." FontSize="11" Foreground="#8892B0" HorizontalAlignment="Center" Margin="0,6,0,0"/>
+            </StackPanel>
+
+            <!-- Buttons -->
+            <Grid Margin="0,18,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Button Grid.Column="0" Style="{StaticResource LoginButton}" Content="🔄 测试连接"
+                        Background="#1E2A45" Click="TestConnection_Click"/>
+                <Button Grid.Column="2" Style="{StaticResource LoginButton}" Content="🔓 解锁系统" Click="Login_Click"/>
+            </Grid>
+
+            <!-- Offline hint -->
+            <TextBlock FontSize="10" Foreground="#4A5578" HorizontalAlignment="Center" Margin="0,16,0,0">
+                <Hyperlink Click="SkipLogin_Click" Foreground="#4F8CFF" FontSize="10">跳过认证，使用本地模式</Hyperlink>
+            </TextBlock>
+        </StackPanel>
+    </Grid>
+</Window>

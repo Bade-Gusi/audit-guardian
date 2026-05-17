@@ -1,0 +1,138 @@
+[
+  {
+    "name": "Cheat Engine",
+    "patterns": ["cheatengine*.exe", "cheatengine*.dll", "CE*.exe"],
+    "hashes": [],
+    "severity": "high",
+    "category": "memory_editor",
+    "description": "通用内存编辑器，常用于修改游戏内存数据"
+  },
+  {
+    "name": "ArtMoney",
+    "patterns": ["artmoney*.exe", "artmoney*.dll"],
+    "hashes": [],
+    "severity": "high",
+    "category": "memory_editor",
+    "description": "内存编辑工具，可搜索和修改进程内存"
+  },
+  {
+    "name": "GameGuardian",
+    "patterns": ["gameguardian*"],
+    "hashes": [],
+    "severity": "high",
+    "category": "memory_editor",
+    "description": "Android/PC游戏内存修改工具"
+  },
+  {
+    "name": "OllyDbg",
+    "patterns": ["ollydbg*.exe", "ollydbg*.dll"],
+    "hashes": [],
+    "severity": "medium",
+    "category": "debugger",
+    "description": "用户模式调试器，可用于逆向分析"
+  },
+  {
+    "name": "x64dbg",
+    "patterns": ["x64dbg*.exe", "x32dbg*.exe", "x96dbg*.exe"],
+    "hashes": [],
+    "severity": "medium",
+    "category": "debugger",
+    "description": "开源调试器，常用于逆向工程"
+  },
+  {
+    "name": "IDA Pro",
+    "patterns": ["ida*.exe", "ida64*.exe", "idag*.exe"],
+    "hashes": [],
+    "severity": "medium",
+    "category": "disassembler",
+    "description": "交互式反汇编器，专业逆向工具"
+  },
+  {
+    "name": "Process Hacker",
+    "patterns": ["processhacker*.exe"],
+    "hashes": [],
+    "severity": "medium",
+    "category": "process_tool",
+    "description": "高级进程管理工具，可结束受保护进程"
+  },
+  {
+    "name": "Process Explorer",
+    "patterns": ["procexp*.exe", "procexp64*.exe"],
+    "hashes": [],
+    "severity": "low",
+    "category": "process_tool",
+    "description": "进程浏览器，Sysinternals工具"
+  },
+  {
+    "name": "Wireshark",
+    "patterns": ["wireshark*.exe", "tshark*.exe"],
+    "hashes": [],
+    "severity": "low",
+    "category": "network",
+    "description": "网络抓包工具"
+  },
+  {
+    "name": "Fiddler",
+    "patterns": ["fiddler*.exe"],
+    "hashes": [],
+    "severity": "low",
+    "category": "network",
+    "description": "HTTP调试代理，可用于篡改网络请求"
+  },
+  {
+    "name": "HTTPDebugger",
+    "patterns": ["httpdebugger*.exe", "httpdebugger*.dll"],
+    "hashes": [],
+    "severity": "medium",
+    "category": "network",
+    "description": "HTTP调试工具，可拦截和修改Web流量"
+  },
+  {
+    "name": "AutoHotkey",
+    "patterns": ["autohotkey*.exe", "ahk*.exe"],
+    "hashes": [],
+    "severity": "medium",
+    "category": "automation",
+    "description": "自动化脚本工具，可用于按键模拟"
+  },
+  {
+    "name": "Pulover's Macro Creator",
+    "patterns": ["macros*.exe", "pulover*"],
+    "hashes": [],
+    "severity": "medium",
+    "category": "automation",
+    "description": "宏录制工具，可自动化鼠标键盘操作"
+  },
+  {
+    "name": "TinyTask",
+    "patterns": ["tinytask*.exe"],
+    "hashes": [],
+    "severity": "medium",
+    "category": "automation",
+    "description": "极简宏录制工具"
+  },
+  {
+    "name": "ReClass.NET",
+    "patterns": ["reclass*.exe", "reclass*.dll"],
+    "hashes": [],
+    "severity": "high",
+    "category": "reverse_engineering",
+    "description": "内存结构逆向工具"
+  },
+  {
+    "name": "dnSpy",
+    "patterns": ["dnspy*.exe"],
+    "hashes": [],
+    "severity": "high",
+    "category": "reverse_engineering",
+    "description": ".NET反编译调试器"
+  },
+  {
+    "name": "HTTPCanary",
+    "patterns": ["httpcanary*"],
+    "hashes": [],
+    "severity": "medium",
+    "category": "network",
+    "description": "HTTP抓包工具"
+  }
+]

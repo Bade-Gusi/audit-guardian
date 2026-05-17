@@ -1,0 +1,72 @@
+[
+  {
+    "name": "Process Hijacking Driver",
+    "patterns": ["processhacker*.sys", "ph3*.sys"],
+    "severity": "high",
+    "category": "rootkit",
+    "description": "Process Hacker内核驱动，可用于绕过进程保护"
+  },
+  {
+    "name": "KprocessHider",
+    "patterns": ["kprocesshider*.sys", "phd*.sys"],
+    "severity": "critical",
+    "category": "rootkit",
+    "description": "进程隐藏驱动，用于隐藏受保护进程"
+  },
+  {
+    "name": "EasyAntiCheat",
+    "patterns": ["easyanticheat*.sys", "easysys*.sys"],
+    "severity": "info",
+    "category": "anticheat_driver",
+    "description": "EAC反作弊驱动(可能被修改绕过)"
+  },
+  {
+    "name": "BattlEye",
+    "patterns": ["battleye*.sys", "beservice*.sys"],
+    "severity": "info",
+    "category": "anticheat_driver",
+    "description": "BattlEye反作弊驱动(可能被修改绕过)"
+  },
+  {
+    "name": "Null ACPI Driver",
+    "patterns": ["null*.sys"],
+    "severity": "critical",
+    "category": "rootkit",
+    "description": "空ACPI驱动，常见rootkit技术"
+  },
+  {
+    "name": "Physical Memory Access Driver",
+    "patterns": ["physmem*.sys", "winring0*.sys", "inpoutx*.sys"],
+    "severity": "high",
+    "category": "memory_access",
+    "description": "物理内存访问驱动，可读取受保护内存"
+  },
+  {
+    "name": "WinRing0",
+    "patterns": ["winring0*.sys", "winring0*.dll"],
+    "severity": "high",
+    "category": "memory_access",
+    "description": "Ring0权限驱动，可读写端口和MSR"
+  },
+  {
+    "name": "HW Acceleration Driver",
+    "patterns": ["hwaccel*.sys"],
+    "severity": "medium",
+    "category": "suspicious",
+    "description": "可疑硬件加速驱动"
+  },
+  {
+    "name": "Process Monitor Driver",
+    "patterns": ["procmon*.sys"],
+    "severity": "medium",
+    "category": "monitoring",
+    "description": "进程监控驱动(Sysinternals Process Monitor)"
+  },
+  {
+    "name": "TCP View Driver",
+    "patterns": ["tcpview*.sys"],
+    "severity": "low",
+    "category": "monitoring",
+    "description": "网络连接监控驱动"
+  }
+]

@@ -1,0 +1,36 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+*.sln.docstates
+.vs/
+
+## Node
+node_modules/
+dist/
+dist-electron/
+
+## Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+## IDE
+.idea/
+*.swp
+*.swo
+
+## OS
+.DS_Store
+Thumbs.db
+
+## Env
+.env
+*.env.local
+
+## Build
+packages/
+*.nupkg
+release/
