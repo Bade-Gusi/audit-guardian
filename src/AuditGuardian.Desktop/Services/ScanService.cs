@@ -125,6 +125,69 @@ public class ScanService
         Progress?.Invoke(85, "扫描网络连接...");
         totalChecks += ScanNetworkConnections(findings);
 
+        // 6. Kernel-level detection (NTDLL hooks, hidden processes, suspicious drivers)
+        Progress?.Invoke(90, "内核层检测...");
+        var kernel = new KernelDetectionService();
+        var kernelResult = kernel.RunKernelDetection();
+
+        // Add NTDLL hooks
+        foreach (var hook in kernelResult.NtdllHooks)
+        {
+            findings.Add(new ScanFinding
+            {
+                Type = "kernel_hook",
+                Severity = "high",
+                Description = $"NTDLL 函数被 Hook: {hook.FunctionName} ({hook.HookType})",
+                MatchedRule = $"ntdll_hook:{hook.FunctionName}",
+                FoundAt = hook.HookAddress,
+                Status = "persistent"
+            });
+        }
+
+        // Add suspicious drivers
+        foreach (var drv in kernelResult.SuspiciousDrivers)
+        {
+            findings.Add(new ScanFinding
+            {
+                Type = "kernel_driver",
+                Severity = drv.Severity,
+                Description = drv.Description,
+                MatchedRule = drv.MatchedRule,
+                FoundAt = DateTime.Now.ToString("o"),
+                Status = "installed"
+            });
+        }
+
+        // Add unsigned driver warnings
+        foreach (var drv in kernelResult.UnsignedDrivers)
+        {
+            findings.Add(new ScanFinding
+            {
+                Type = "unsigned_driver",
+                Severity = "medium",
+                Description = drv.Description,
+                MatchedRule = drv.MatchedRule,
+                FoundAt = DateTime.Now.ToString("o"),
+                Status = "installed"
+            });
+        }
+
+        // Add hidden processes
+        foreach (var hp in kernelResult.HiddenProcesses)
+        {
+            findings.Add(new ScanFinding
+            {
+                Type = "hidden_process",
+                Severity = "critical",
+                Description = $"隐藏进程: PID {hp.Pid} ({hp.ProcessName}) - {hp.SuspicionReason}",
+                MatchedRule = "hidden_process_detection",
+                FoundAt = DateTime.Now.ToString("o"),
+                Status = "running"
+            });
+        }
+
+        totalChecks += kernelResult.LoadedModules.Count;
+
         Progress?.Invoke(100, "扫描完成");
 
         return new ScanResult
